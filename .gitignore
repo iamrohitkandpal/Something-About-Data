@@ -1,0 +1,40 @@
+.streamlit/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# Data files
+*.csv
+*.xlsx
+*.json
+data/
+datasets/
+
+# Model files
+*.pkl
+*.joblib
+models/
+
+# OS files
+.DS_Store
+Thumbs.db
