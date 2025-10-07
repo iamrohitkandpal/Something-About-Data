@@ -35,9 +35,21 @@ class DBConnection:
             self.connection.close()        
             
 class DataService:
+    """Handles saving and loading data using the database."""
     
     def __init__(self, db_connection):
-        self.db = db_connection
-        
-    def sav_user(self, user):
-        
+        self.db = db_connection  # The DB connection object
+    
+    def save_user(self, user):
+        """Save a user to the database."""
+        cursor = self.db.connection.cursor()
+        cursor.execute("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
+                       (user.name, user.email, user.age))
+        self.db.connection.commit()
+    
+    def save_product(self, product):
+        """Save a product to the database."""
+        cursor = self.db.connection.cursor()
+        cursor.execute("INSERT INTO products (name, price, category) VALUES (?, ?, ?)",
+                       (product.name, product.price, product.category))
+        self.db.connection.commit()
