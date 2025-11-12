@@ -59,8 +59,12 @@ class TwitterClient:
                 tweet_fields=['created_at', 'author_id', 'public_metrics', 'context_annotations']  
             )
             
+            print(f"📊 Twitter API Response: {tweets}")
+            print(f"📊 Tweets data: {tweets.data if tweets else 'None'}")
+            
             if not tweets.data:
-                return []
+                print("⚠️ No tweets found in API response. Using simulated data.")
+                return self._get_simulated_tweets(max_results)
             
             tweet_list = []
             for tweet in tweets.data:
@@ -74,6 +78,7 @@ class TwitterClient:
                 }
                 tweet_list.append(tweet_data)
                 
+            print(f"✅ Successfully processed {len(tweet_list)} tweets from API")
             return tweet_list
         
         except Exception as e:
@@ -239,6 +244,12 @@ def main():
     if 'search_query' not in st.session_state:
         st.session_state.search_query = "python OR javascript OR coding"
         
+    # if st.session_state.twitter_client.client is not None:
+    #     # st.warning("⚠️ **Rate Limits Active**\n\nTwitter allows 300 requests per 15 minutes. If you see 'sleeping' messages, the app is waiting for the limit to reset.")
+    #     # st.info("💡 **Tip**: Disable auto-refresh to avoid hitting rate limits quickly")
+    # else:
+    #     st.info("ℹ️ **Info**: Using simulated tweet data. Connect Twitter API for live data.")
+        
     st.sidebar.header("🔧 Controls")
     
     # Search configuration
@@ -252,12 +263,12 @@ def main():
     if search_query != st.session_state.search_query:
         st.session_state.search_query = search_query
         
-    tweet_count = st.sidebar.slider("Tweets per fetch:", 10, 100, 20)
+    tweet_count = st.sidebar.slider("Tweets per fetch:", 10, 50, 20)
     
     auto_refresh = st.sidebar.checkbox("🔄 Auto Refresh", value=False)
     
     if auto_refresh:
-        refresh_interval = st.sidebar.slider("Refresh Interval (seconds):", 30, 300, 60)
+        refresh_interval = st.sidebar.slider("Refresh Interval (seconds):", 300, 1800, 900)
         
         if 'last_refresh_time' not in st.session_state:
             st.session_state.last_refresh_time = time.time()
@@ -287,8 +298,20 @@ def main():
         analyze_user_tweet(user_tweet)
         
     if not st.session_state.tweets_data:
-        st.info("👆 Click 'Fetch New Tweets' to start analyzing Twitter sentiment!")
-        fetch_tweets(search_query, tweet_count)
+        st.info("👆 **Welcome!** Click '🔍 Fetch New Tweets' button to start analyzing Twitter sentiment!")
+        st.markdown("""
+        ### 🚀 How to use:
+        1. **Enter search terms** in the sidebar (e.g., "python", "ai OR machine learning")
+        2. **Adjust tweet count** (10-50 tweets per search)
+        3. **Click 'Fetch New Tweets'** to start analysis
+        4. **Try the text analyzer** to test custom text
+        
+        ### 📊 You'll see:
+        - Real-time sentiment metrics
+        - Interactive charts and graphs  
+        - Word cloud visualization
+        - Recent tweets table
+        """)
     else:
         display_dashboard()
             
@@ -326,6 +349,7 @@ def fetch_tweets(query, count):
                 st.session_state.tweets_data = st.session_state.tweets_data[-500:]
             
             st.success(f"✅ Fetched and analyzed {len(tweets)} tweets!")
+            st.rerun()
         
         except Exception as e:
             st.error(f"❌ Error fetching tweets: {str(e)}")
@@ -400,6 +424,8 @@ def display_metrics(df):
         st.metric("🎯 Avg Confidence", f"{avg_confidence:.2f}")
         
 def display_charts(df):
+    colors = {'Positive': '#28a745', 'Negative': '#dc3545', 'Neutral': '#6c757d'}
+    
     col1, col2 = st.columns(2)
     
     with col1:
