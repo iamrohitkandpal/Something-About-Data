@@ -226,6 +226,171 @@ def create_forecast_chart(daily_sales, model, controls):
         x=daily_sales['ds'],
         y=daily_sales['y'],
         mode='lines+markers',
-        name="📊 Historical"
+        name="📊 Historical Sales",
+        line=dict(color='#1f77b4', width=3),
+        marker=dict(size=4),
+        hovertemplate='<b>Date:</b> %{x}<br><b>Sales:</b> %{y:,.0f} units<extra></extra>'
     ))
+    
+    forecast_start = len(daily_sales)
+    fig.add_trace(go.Scatter(
+        x=forecast['ds'][forecast_start:],
+        y=forecast['yhat'][forecast_start:],
+        mode='lines+markers',
+        name="🔮 Forecast",
+        line=dict(color='#ff7f0e', width=3, dash='dash'),
+        marker=dict(size=6, symbol='diamond'),
+        hovertemplate='<b>Predicted Date:</b> %{x}<br><b>Forecast:</b> &{y:,.0f} units<extra></extra>'
+    ))
+    
+    if controls['show_confidence']:
+        fig.add_trace(go.Scatter(
+            x=forecast['ds'][forecast_start:],
+            y=forecast['yhat_pper'][forecast_start:],
+            mode='lines',
+            line=dict(width=0),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
         
+        fig.add_trace(go.Scatter(
+            x=forecast['ds'][forecast_start:],
+            y=forecast['yhat_lower'][forecast_start:],
+            mode='lines',
+            line=dict(width=0),
+            fill='tonexty',
+            fillcolor='rgba(255,127,14,0.2)',
+            name='🎯 95% Confidence',
+            hovertemplate='<b>Range:</b> %{y:,.0f} - upper bound<extra></extra>'
+        ))
+        
+    if controls['chart_theme'] == 'Dark':
+        template = 'plotly_dark'
+        bg_color = '#2F3349'
+    elif controls['chart_theme'] == 'Colorful':
+        template = 'plotly'
+        bg_color = '#F0F8FF'
+    elif controls['chart_theme'] == 'Minimal':
+        template = 'simple_white'
+        bg_color = 'white'
+    else:
+        template = 'plotly'
+        bg_color = 'white'
+        
+    fig.update_layout(
+        title=f"📈 Sales Forecast for Next {controls['forecast_days']} Days",
+        xaxis_title="📅 Date",
+        yaxis_title="📦 Units Sold",
+        height=controls['charts_height'],
+        template=template,
+        plot_bgcolor=bg_color,
+        hovermode='x unified',
+        showlegend=True,
+        font=dict(size=12)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    return forecast
+
+# Business Insights Function
+def display_business_insights(forecast, daily_sales, controls):
+    st.subheader("💼 Business Intelligence & Insights")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📅 Next Week Detailed Forecast")
+        
+        next_week = forecast.tail(7)[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].round(0)
+        
+        for idx, row in next_week.iterrows():
+            day_name = row['ds'].strftime('%A')
+            date = row['ds'].strftime('%d-%m-%Y')
+            predicted_sales = row['yhat']
+            
+            if predicted_sales > daily_sales['y'].quantile(0.8):
+                emoji = "🔥"  # High sales day
+                color = "🟢"
+            elif predicted_sales < daily_sales['y'].quantile(0.2):
+                emoji = "📉"  # Low sales day
+                color = "🔴"
+            else:
+                emoji = "📈"  # Normal sales day
+                color = "🟡"
+                
+            st.markdown(f"""
+            **{emoji} {day_name} ({date})**
+            {color} Predicted: **{predicted_sales:,.0f} units**
+            Range: {row['yhat_lower']:,.0f} - {row['yhat_upper']:,.0f}
+            """)
+            
+        weekly_total = next_week['yhat'].sum()
+        st.success(f"📊 **Total Next Week**: {weekly_total:,.0f} units")
+        
+    with col2:
+        st.markdown("### 🎯 Actinable Business Recommendations")
+        
+        avg_forecast = forecast.tail(controls['forecast_days'])['yhat'].mean()
+        historical_avg = daily_sales['y'].mean()
+        
+        peak_day = forecast.tail(controls['forecast_days']).loc[
+            forecast.tail(controls['forecast_days'])['yhat'].idxmax()
+        ]
+        
+        low_day = forecast.tail(controls['forecast_days']).loc[
+            forecast.tail(controls['forecast_days'])['yhat'].idxmin()
+        ]
+        
+        # Trend analysis
+        if avg_forecast > historical_avg * 1.05:
+            trend_msg = "📈 **Growing Trend** - Sales increasing!"
+            trend_color = "success"
+        elif avg_forecast < historical_avg * 0.95:
+            trend_msg = "📉 **Declining Trend** - Need attention!"
+            trend_color = "warning"  
+        else:
+            trend_msg = "➡️ **Stable Trend** - Consistent performance"
+            trend_color = "info"
+            
+        eval(f"st.{trend_color}(trend_msg)")
+        
+        st.info(f"""
+        **📊 Forecast Summary:**
+        - Average daily: {avg_forecast:,.0f} units
+        - vs Historical: {((avg_forecast-historical_avg)/historical_avg)*100:+.1f}%
+        - Total {controls['forecast_days']} days: {forecast.tail(controls['forecast_days'])['yhat'].sum():,.0f} units        
+        """)
+        
+        st.warning(f"""
+        **🎯 Peak Sales Day:**
+        📅 {peak_day['ds'].strftime('%A, %d %B')}
+        📈 Expected: {peak_day['yhat']:,.0f} units
+        
+        💡 *Recommendation: Ensure adequate inventory!*
+        """)
+        
+        st.error(f"""
+        **📉 Lowest Sales Day:**
+        📅 {low_day['ds'].strftime('%A, %d %B')} 
+        📉 Expected: {low_day['yhat']:,.0f} units
+        
+        💡 *Recommendation: Plan promotions or marketing!*
+        """)
+            
+# Model performance Function
+def display_model_performance(model, daily_sales, controls):
+    if not controls['show_model_details']:
+        return
+    
+    st.subheader("🎯 Model Performance Analytics")
+    
+    split_point = int(len(daily_sales) * 0.8)
+    test_data = daily_sales[split_point:].copy()
+    
+    if len(test_data) == 0:
+        st.warning("⚠️ Not enough data for performance testing")
+        return 
+    
+    test_future = model.make_future_dataframe(periods=0)
+    
