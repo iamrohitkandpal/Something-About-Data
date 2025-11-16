@@ -81,7 +81,7 @@ def load_and_prepare_data():
         required_columns = ['week', 'units_sold', 'store_id', 'sku_id']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
-            st.error(f"❌ Missing reuired columns: {missing_columns}")
+            st.error(f"❌ Missing required columns: {missing_columns}")
             return None, None
         
         if (df['units_sold'] < 0).any():
@@ -106,6 +106,73 @@ def load_and_prepare_data():
         return None, None
     except Exception as e:
         st.error(f"❌ Data loading error: {str(e)}")
+        return None, None
+    
+def load_and_prepare_data_with_upload(uploaded_file):
+    try:
+        if uploaded_file is not None:
+            df = pd.read_csv(uploaded_file)
+            st.info(f"📂 Using uploaded file: {uploaded_file.name}")
+        else:
+            df = pd.read_csv('train_data.csv')
+            st.info("📂 Using default training dataset")
+        
+        if df.empty:
+            st.error("❌ Dataset is empty!")
+            return None, None
+        
+        required_columns = ['week', 'units_sold', 'store_id', 'sku_id']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            st.error(f"❌ Missing required columns: {missing_columns}")
+            st.info("💡 Your CSV must contain: week, units_sold, store_id, sku_id")
+            
+            with st.expander("📋 See Required Data Format"):
+                example_data = pd.DataFrame({
+                    'record_ID': [1, 2, 3],
+                    'week': ['17-01-2011', '17-01-2011', '17-01-2011'],
+                    'store_id': [8091, 8091, 8095],
+                    'sku_id': [216418, 216419, 216418],
+                    'total_price': [99.04, 99.04, 99.04],
+                    'base_price': [111.86, 99.04, 99.04],
+                    'is_featured_sku': [0, 0, 0],
+                    'is_display_sku': [0, 0, 0],
+                    'units_sold': [20, 28, 99]
+                })
+                st.dataframe(example_data)
+            return None, None
+        
+        if len(df) < 30:
+            st.warning("⚠️ Dataset too small for reliable forecasting (minimum 30 records)")
+            
+        if len(df) > 1000000:
+            st.warning("⚠️ Large dataset detected. Pracessing may take longer...)")
+            
+        if(df['units_sold'] < 0).any():
+            st.warning("⚠️ Found negative sales values. Cleaning data...")
+            df = df[df['units_sold'] >= 0]
+        
+        try:
+            df['date'] = pd.to_datetime(df['week'], format='%d-%m-%Y')
+        except:
+            try:
+                df['date'] = pd.to_datetime(df['week'])
+            except:
+                try:
+                    df['date'] = pd.to_datetime(df['week'])
+                except:
+                    st.error("❌ Cannot parse date format. Please use DD-MM-YYYY format")
+                    return None, None
+        daily_sales = df.groupby('date')['units_sold'].sum().reset_index()
+        daily_sales.columns = ['ds', 'y']
+        
+        st.success(f"✅ Data processed successfully! {len(df)} records, {len(daily_sales)} days")
+        
+        return df, daily_sales
+    
+    except Exception as e:
+        st.error(f"❌ Error processing file: {str(e)}")
         return None, None
 
 @st.cache_resource
@@ -140,6 +207,34 @@ def create_sidebar_controls():
         help="Move the slider for predictions"
     )
     
+    # Advanced Forecasting Options
+    st.sidebar.subheader("🔬 Advanced Options")
+    
+    model_type = st.sidebar.selectbox(
+        "Choose Forecasting Model:",
+        ["Prophet (Default)", "Prophet with Holidays", "Prophet Enhanced"],
+        help="Select the forecasting algorithm"
+    )
+    
+    confidence_level = st.sidebar.slider(
+        "Confidence Interval:",
+        min_value=80,
+        max_value=99,
+        value=95,
+        help="Statistical confidence level for predictions"
+    )
+    
+    include_holidays = st.sidebar.checkbox(
+        "Include Holiday Effects",
+        help="Account for holiday sales patterns"
+    )
+    
+    seasonal_adjustment = st.sidebar.selectbox(
+        "Seasonal Adjustment:",
+        ["Auto", "Weekly", "Monthly", "Quarterly"],
+        help="Type of seasonality to emphasize"
+    )
+    
     st.sidebar.subheader("👁️ Display Options")
     
     show_confidence = st.sidebar.checkbox(
@@ -160,6 +255,24 @@ def create_sidebar_controls():
         help="RMSE, accuracy and test results"
     )
     
+    show_business_dashboard = st.sidebar.checkbox(
+        "Show Business Dashboard",
+        value=True,
+        help="Executive KPIs and business metrics"
+    )
+    
+    show_data_quality = st.sidebar.checkbox(
+        "Show Data Quality Report",
+        value=False,
+        help="Data completeness and quality assessment"
+    )
+    
+    show_alerts = st.sidebar.checkbox(
+        "Show Business Alerts",
+        value=True,
+        help="Automated alerts for business anomalies"
+    )
+    
     st.sidebar.subheader("🎨 Chart Styling")
     
     chart_theme = st.sidebar.selectbox(
@@ -178,9 +291,16 @@ def create_sidebar_controls():
     
     return {
         'forecast_days': forecast_days,
+        'model_type': model_type,
+        'confidence_level': confidence_level,
+        'include_holidays': include_holidays,
+        'seasonal_adjustment': seasonal_adjustment,
         'show_confidence': show_confidence,
         'show_raw_data': show_raw_data,
         'show_model_details': show_model_details,
+        'show_business_dashboard': show_business_dashboard,
+        'show_data_quality': show_data_quality,
+        'show_alerts': show_alerts,
         'chart_theme': chart_theme,
         'chart_height': chart_height,
     }
@@ -231,10 +351,6 @@ def display_key_metrics(df, daily_sales):
             help="Number of Unique Products",
         )
         
-# Advanced Forecasting Option
-def create_advanced_forecasting(dail_sales, controls):
-    st.subheader("🔬 Advanced Forecasting Options")
-
 # Forecasting Chart Function
 def create_forecast_chart(daily_sales, model, controls):
     st.subheader("🔮 Sales Forecasting with Prophet Model")
@@ -402,12 +518,15 @@ def display_business_insights(forecast, daily_sales, controls):
         
 # Business Intelligence Dashboard
 def create_business_dashboard(df, forecast, controls):
+    if not controls['show_business_dashboard']:
+        return
+    
     st.subheader("🎯 Executive Business Dashboard")
     
     col1, col2, col3, col4 = st.columns(4)
     
     avg_price = df['total_price'].mean()
-    forecast_revenue = forecast.tail(controls['forecast_days'])['yhat']
+    forecast_revenue = forecast.tail(controls['forecast_days'])['yhat'].sum() * avg_price
     
     with col1:
         st.metric(
@@ -420,24 +539,114 @@ def create_business_dashboard(df, forecast, controls):
         st.metric(
             "📦 Peak Inventory Need",
             f"{max_daily:,.0f} units",
-            help="Maximum single-dya inventory requirement"
+            help="Maximum single-day inventory requirement"
         )    
+    with col3:
+        avg_forecast = forecast.tail(controls['forecast_days'])['yhat'].mean()
+        historical_avg = df.groupby('date')['units_sold'].sum().mean()
+        growth = ((avg_forecast - historical_avg) / historical_avg) * 100
+        st.metric(
+            "📈 Forecast Growth",
+            f"{growth:+.1f}%",
+            delta=f"vs historical_avg",
+            help="Growth compare to historical average"
+        )
+    with col4:
+        total_forecast = forecast.tail(controls['forecast_days'])['yhat'].sum()
+        st.metric(
+            "📊 Total Forecast",
+            f"{total_forecast:,.0f} units",
+            help=f"Total units for next {controls['forecast_days']} days"
+        )
         
     st.markdown("#### 🏪 Store Performance Analysis")
-    store_performance = df.groupby('store_id').agg({
-        'units_sold': 'sum',
-        'total_price': 'mean'
-    }).round(2)
     
-    fig = px.scatter(
-        store_performance,
-        x='total_price',
-        y='units_sold',
-        title="Store Performance: Price vs Volume",
-        labels={'total_price': 'Average Price', 'units_sold': 'Total Units Sold'}
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    col1, col2 = st.columns(2)
     
+    with col1:
+        store_performance = df.groupby('store_id').agg({
+            'units_sold': 'sum',
+            'total_price': 'mean'
+        }).round(2)
+
+        fig = px.scatter(
+            store_performance,
+            x='total_price',
+            y='units_sold',
+            title="Store Performance: Price vs Volume",
+            labels={'total_price': 'Average Price', 'units_sold': 'Total Units Sold'},
+            hover_data={'total_price': ':2f', 'units_sold': ':,'}
+        )
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        top_stores = df.groupby('store_id') ['units_sold'].sum().sort_values(ascending=False).head(10)
+        
+        fig = px.bar(
+            x=top_stores.index.astype(str),
+            y = top_stores.values,
+            title="🏆 Top 10 Performing Stores",
+            labels={'x': 'Sore ID', 'y': 'Total Units Sold'},
+            color=top_stores.values,
+            color_continuous_scale='Blues'
+        )   
+        fig.update_layout(height=400, showLegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("#### 🛍️ Product Performance Indights")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        featured_performance = df.groupby('is_featured_sku').agg({
+            'units_sold': ['sum', 'mean'],
+            'total_price': 'mean'
+        }).round(2)
+        
+        featured_data = pd.DataFrame({
+            'Category': ['Regular Products', 'Featured Products'],
+            'Total_Sales': [
+                featured_performance.loc[0, ('units_sold', 'sum')],
+                featured_performance.loc[1, ('units_sold', 'sum')] if 1 in featured_performance.index else 0,
+            ],
+            'Avg_Sales': [
+                featured_performance.loc[0, ('units_sold', 'mean')],
+                featured_performance.loc[1, ('units_sold', 'mean')] if 1 in featured_performance.index else 0,
+            ]
+        })
+        
+        fig = px.bar(
+            featured_data,
+            x="Category",
+            y='Total_Sales',
+            title='📊 Featured vs Regular Products',
+            color='Category',
+            color_discrete_map={
+                'Regular Products': '#3498db',
+                'Featured Products': '#e74c3c',
+            }
+        )
+        fig.update_layout(height=350, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        price_sales = df.groupby(pd.cut(df['total_price'], bins=5)).agg({
+            'units_sold': 'sum'
+        }).reset_index()
+        price_sales['price_range'] = price_sales['total_price'].astype(str)
+        
+        fig = px.line(
+            price_sales,
+            x='price_range',
+            y='units_sold',
+            title="💰 Price Range vs Sales Volume",
+            markers=True
+        )
+        fig.update_layout(height=350)
+        fig.update_xaxes(title="Price Range")
+        fig.update_yaxes(title="Units Sold")
+        st.plotly_chart(fig, use_container_width=True)
             
 # Model performance Function
 def display_model_performance(model, daily_sales, controls):
@@ -631,6 +840,75 @@ def display_data_explorer(df, daily_sales, controls):
         )
         st.plotly_chart(fig_dist, use_container_width=True)
     
+# Enhanced Sidebar Controls
+def create_enhanced_sidebar_controls():
+    st.sidebar.header("🎛️ Dashboard Controls")
+    st.sidebar.markdown("*Customize your forecasting experience*")
+    
+    # File Upload Section
+    st.sidebar.subheader("📂 Data Source")
+    uploaded_file = st.sidebar.file_uploader(
+        "Upload your CSV file",
+        type=['csv'],
+        help="Upload retail sales data or use default dataset"
+    )
+    
+    st.sidebar.subheader("📅 Forecast Configuration")
+    st.sidebar.info("📍 **Current Data Range**: Based on your latest sales data")
+    
+    forecast_method = st.sidebar.radio(
+        "Choose Forecasting Method:",
+        ["📊 Days from Last Date", "📅 Specific Date Range", "🎯 Next N Business Days"]
+    )
+    
+    if forecast_method == "📊 Days from Last Date":
+        forecast_days = st.sidebar.slider(
+            "Forecast Duration (days from last data point):",
+            min_value=7,
+            max_value=90,
+            value=30,
+            step=7,
+            help="Predict next N days from your latest sales date"
+        )
+        start_date = None
+        end_date = None
+    elif forecast_method == "📅 Specific Date Range":
+        col1, col2 = st.sidebar.columns(2)
+        
+        with col1:
+            start_date = st.sidebar.date_input("Start Date:")
+        with col2:
+            end_date = st.sidebar.date_input("End Date:")
+            
+        if start_date and end_date:
+            forecast_days = (end_date - start_date).days
+            if forecast_days <= 0:
+                st.sidebar.error("End date must be after start date!")
+                forecast_days = 7
+        else:
+            forecast_days = 7
+    else:
+        business_days = st.sidebar.slider(
+            "Business Days to Forecast:",
+            min_value=5,
+            max_value=60,
+            value=20,
+            step=5,
+            help="Exclude weekends from forecast period"
+        )
+        forecast_days = int(business_days * 1.4)
+        start_date = None
+        end_date = None
+    
+    return {
+        'uploaded_file': uploaded_file,
+        'forecast_method': forecast_method,
+        'forecast_days': forecast_days,
+        'start_date': start_date,
+        'end_date': end_date
+    }
+    
+
 # Export Functionality    
 def create_export_section(forecast, daily_sales, controls):
     st.subheader("💾 Export Your Results")
@@ -670,15 +948,17 @@ def create_export_section(forecast, daily_sales, controls):
 RETAIL SALES FORECAST REPORT
 =====================================
 Generated on: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
+Model: {controls['model_type']}
+Confidence Level: {controls['confidence_level']}%
 
 📊 EXECUTIVE SUMMARY:
-● Forecast Period: {controls['forecast_days']} days
-● Average Daily Forecast: {avg_forecast:,.0f} units
-● Total Forecast Sales: {total_forecast:,.0f} units
-● Historical Daily Average: {daily_sales['y'].mean():,.0f} units
+• Forecast Period: {controls['forecast_days']} days
+• Average Daily Forecast: {avg_forecast:,.0f} units
+• Total Forecast Sales: {total_forecast:,.0f} units
+• Historical Daily Average: {daily_sales['y'].mean():,.0f} units
 
 📈 TREND ANALYSIS:
-● Growth vs Historical: {((avg_forecast - daily_sales['y'].mean()) / daily_sales['y'].mean()) * 100:+.1f}%
+• Growth vs Historical: {((avg_forecast - daily_sales['y'].mean()) / daily_sales['y'].mean()) * 100:+.1f}%
 
 🎯 NEXT WEEK FORECAST:
 """
@@ -698,9 +978,15 @@ Generated on: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
 • Ensure adequate staffing during high-demand forecasts
 • Review supplier agreements for demand spikes
 
+📊 MODEL PERFORMANCE:
+• Algorithm: Facebook Prophet
+• Confidence Interval: {controls['confidence_level']}%
+• Seasonality: {controls['seasonal_adjustment']}
+• Holiday Effects: {'Included' if controls['include_holidays'] else 'Not Included'}
+
 ---
-Report generated by Streamlit Forecasting Dashboard
-Built with ❤️ using Python, Prophet, and Streamlit
+Report generated by Retail Sales Forecasting Dashboard
+Built with Python, Prophet, and Streamlit
 """
             st.download_button(
                 label="📥 Download Business Report",
@@ -711,8 +997,158 @@ Built with ❤️ using Python, Prophet, and Streamlit
             )
 
             st.success("✅ Business report ready for download!")
+
+# Data Quality Report
+def create_data_quality_report(df):
+    st.subheader("🔍 Data Quality Assessment")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown('#### 📊 Data Completeness')
+        missing_data = df.isnull().sum()
+        completeness = (1 - missing_data / len(df)) * 100
         
+        for col, pct in completeness.items():
+            color = "🟢" if pct > 95 else "🟡" if pct > 90 else "🔴"
+            st.write(f"{color} {col}: {pct:.1f}% complete")
+    
+    with col2:
+        st.markdown("#### 📈 Statistical Summary")
+        st.write("**Sales Distribution:**")
+        st.write(f"Mean: {df['units_sold'].mean():.1f}")
+        st.write(f"Median: {df['units_sold'].median():.1f}")
+        st.write(f"Std Dev: {df['units_sold'].std():.1f}")
+        st.write(f"Min: {df['units_sold'].min()}")
+        st.write(f"Max: {df['units_sold'].max()}")
+        
+        st.write("**Price Statistics:**")
+        st.write(f"Avg Price: ${df['total_price'].mean():.2f}")
+        st.write(f"Price Range: {df['total_price'].min():.2f} - ${df['total_price'].max():.2f}")
+        
+    with col3:
+        st.markdown('#### ⚠️ Data Issues')
+        issues = []
+        
+        if(df['units_sold'] == 0).sum() > 0:
+            issues.append(f"🟡 {(df['units_sold'] == 0).sum()} zero sales records")
             
+        if df.duplicated().sum() > 0:
+            issues.append(f"🟡 {df.duplicated().sum()} duplicate records")
+            
+        if (df['total_price'] <= 0).sum() > 0:
+            issues.append(f"🔴 {(df['total_price'] <= 0).sum()} invalid price records")
+            
+        q1 =df['units_sold'].quantile(0.25)
+        q3 =df['units_sold'].quantile(0.75)
+        iqr = q3 - q1
+        outliers = df[(df['units_sold'] < (q1 - 1.5 * iqr)) | (df['units_sold'] > (q3 + 1.5 * iqr))]
+        
+        if len(outliers) > 0:
+            issues.append(f"🟡 {len(outliers)} potential outliers detected")
+        
+        if not issues:
+            issues.append("🟢 No major data quality issues")
+            
+        for issue in issues:
+            st.write(issue)
+            
+    st.markdown("#### 🎯 Overall Data Quality Score")
+    
+    completeness_score = completeness.mean()
+    outlier_penalty = min(20, (len(outliers) / len(df)) * 100)
+    missing_penalty = min(10, (df.isnull().sum().sum() / (len(df) * len(df.columns))) * 100)
+    
+    quality_score = max(0, completeness_score - outlier_penalty - missing_penalty)
+    
+    if quality_score >= 90:
+        color = "🟢"
+        status = "Excellent"
+    elif quality_score >= 80:
+        color = "🟡"
+        status = "Good"
+    else:
+        color = "🔴"
+        status = "Needs Improvement"
+    
+    st.metric(
+        f"{color} Data Quality Score",
+        f"{quality_score:.1f}/100",
+        delta=status,
+        help="Based on completeness, outliers, and missing data"
+    )
+
+            
+# Real-Time Alert System
+def create_alert_system(forecast, daily_sales, controls):
+    if not controls['show_alerts']:
+        return
+    
+    st.subheader("🚨 Business Alerts & Recommendations")
+    
+    alerts = []
+    
+    recent_forecast = forecast.tail(controls['forecast_days'])['yhat']
+    historical_avg = daily_sales['y'].mean()
+    
+    # Alert for significant drops
+    if recent_forecast.min() < historical_avg * 0.5:
+        alerts.append({
+            "type": "error",
+            "title": "📉 Significant Sales Drop Predicted",
+            "message": f"Sales may drop to {recent_forecast.min():,.0f} units (vs avg {historical_avg:,.0f})",
+            "action": "Consider promotional campaigns or inventory adjustments"
+        })
+    
+    # Alert for high demand
+    if recent_forecast.max() > historical_avg * 1.5:
+        alerts.append({
+            "type": "warning",
+            "title": "🔥 High Demand Period Ahead",
+            "message": f"Peak demand of {recent_forecast.max():,.0f} units expected",
+            "action": "Ensure adequate inventory and staffing"
+        })
+    
+    # Alert for unusual variance
+    forecast_std = recent_forecast.std()
+    historical_std = daily_sales['y'].std()
+    
+    if forecast_std > historical_std * 1.5:
+        alerts.append({
+            "type": "info",
+            "title": "📊 High Volatility Period",
+            "message": f"Sales volatility is {(forecast_std/historical_std):.1f}x higher than historical",
+            "action": "Prepare for variable demand patterns"
+        })
+        
+    forecast_with_day = forecast.tail(controls['forecast_days']).copy()
+    forecast_with_day['day_of_week'] = forecast_with_day['ds'].dt.day_name()
+    
+    weekend_avg = forecast_with_day[forecast_with_day['day_of_week'].isin(['Saturday', 'Sunday'])]['yhat'].mean()
+    weekday_avg = forecast_with_day[~forecast_with_day['day_of_week'].isin(['Saturday', 'Sunday'])]['yhat'].mean()
+    
+    if not np.isnan(weekday_avg) and not np.isnan(weekend_avg):
+        if weekend_avg > weekday_avg * 1.3:
+            alerts.append({
+                "type": "info",
+                "title": "🎉 Strong Weekend Performance Expected",
+                "message": f"Weekend sales ({weekend_avg:.0f}) vs weekday ({weekday_avg:.0f})",
+                "action": "Optimize weekend staffing and inventory"
+            })
+        
+    # Display alerts
+    if alerts:
+        for alert in alerts:
+            if alert["type"] == "error":
+                st.error(f"**{alert['title']}**\n\n{alert['message']}\n\n💡 *Action Required: {alert['action']}*")
+            elif alert["type"] == "warning":
+                st.warning(f"**{alert['title']}**\n\n{alert['message']}\n\n💡 *Recommended Action: {alert['action']}*")
+            else:
+                st.info(f"**{alert['title']}**\n\n{alert['message']}\n\n💡 *Consider: {alert['action']}*")
+    else:
+        st.success("✅ **All Clear!** No significant business alerts at this time.")
+
+
 # MAIN FUNCTION
 def main():
     st.title("📈 Retail Sales Forecasting Dashboard")
