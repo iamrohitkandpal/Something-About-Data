@@ -32,66 +32,66 @@ class RedditClient:
             self.reddit = None
             self.connected = False
 
-def search_subreddit_posts(self, subreddit_name, query="", limit=50, time_filter="week", sort_by="hot"):
-    """Search posts in a subreddit"""
-    if not self.connected:
-        return self._generate_fake_reddit_data(limit, subreddit_name)
-    
-    try:
-        posts_data = []
-        subreddit = self.reddit.subreddit(subreddit_name)
+    def search_subreddit_posts(self, subreddit_name, query="", limit=50, time_filter="week", sort_by="hot"):
+        """Search posts in a subreddit"""
+        if not self.connected or self.reddit is None:
+            return self._generate_fake_reddit_data(limit, subreddit_name)
         
-        if query:
-            posts = subreddit.search(query, limit=limit, time_filter=time_filter, sort=sort_by)
-        else:
-            if sort_by == "hot":
-                posts = subreddit.hot(limit=limit)
-            elif sort_by == "new":
-                posts = subreddit.new(limit=limit)
-            elif sort_by == "top":
-                posts = subreddit.top(time_filter=time_filter, limit=limit)
-            else:
-                posts = subreddit.hot(limit=limit)
-        
-        for post in posts:
-            post.comments.replace_more(limit=0)
-            top_comments = post.comments.list()[:5]
+        try:
+            posts_data = []
+            subreddit = self.reddit.subreddit(subreddit_name)
             
-            post_data = {
-                'post_id': post.id,
-                'title': post.title,
-                'text': post.selftext if post.selftext else post.title,
-                'author': str(post.author) if post.author else '[deleted]',
-                'score': post.score,
-                'upvote_ratio': post.upvote_ratio,
-                'num_comments': post.num_comments,
-                'created_utc': datetime.fromtimestamp(post.created_utc),
-                'utl': f"https://reddit.com{post.permalink}",
-                'subreddit': subreddit_name,
-                'comments': [
-                    {
-                        'text': comment.body,
-                        'score': comment.score,
-                        'author': str(comment.author) if comment.author else '[deleted]',
-                    }
-                    for comment in top_comments
-                ]
-            }
-            posts_data.append(post_data)
+            if query:
+                posts = subreddit.search(query, limit=limit, time_filter=time_filter, sort=sort_by)
+            else:
+                if sort_by == "hot":
+                    posts = subreddit.hot(limit=limit)
+                elif sort_by == "new":
+                    posts = subreddit.new(limit=limit)
+                elif sort_by == "top":
+                    posts = subreddit.top(time_filter=time_filter, limit=limit)
+                else:
+                    posts = subreddit.hot(limit=limit)
+            
+            for post in posts:
+                post.comments.replace_more(limit=0)
+                top_comments = post.comments.list()[:5]
+                
+                post_data = {
+                    'post_id': post.id,
+                    'title': post.title,
+                    'text': post.selftext if post.selftext else post.title,
+                    'author': str(post.author) if post.author else '[deleted]',
+                    'score': post.score,
+                    'upvote_ratio': post.upvote_ratio,
+                    'num_comments': post.num_comments,
+                    'created_utc': datetime.fromtimestamp(post.created_utc),
+                    'url': f"https://reddit.com{post.permalink}",
+                    'subreddit': subreddit_name,
+                    'comments': [
+                        {
+                            'text': comment.body,
+                            'score': comment.score,
+                            'author': str(comment.author) if comment.author else '[deleted]',
+                        }
+                        for comment in top_comments
+                    ]
+                }
+                posts_data.append(post_data)
+            
+            print(f"✅ Fetched {len(posts_data)} posts from r/{subreddit_name}")
+            return posts_data
         
-        print(f"✅ Fetched {len(posts_data)} posts from r/{subreddit_name}")
-        return posts_data
-    
-    except Exception as e:
-        print(f"❌ Error fetching Reddit data: {str(e)}")
-        st.error(f"Error: {str(e)}")
-        return []
-    
-def generate_fake_reddit_data(self, count, subreddit_name):
-    """Generate fake Reddit data for testing"""
-    fake_posts = []
-    sample_texts = [
-        "This new Python library is amazing! Highly recommend it for data analysis.",
+        except Exception as e:
+            print(f"❌ Error fetching Reddit data: {str(e)}")
+            st.error(f"Error: {str(e)}")
+            return []
+        
+    def _generate_fake_reddit_data(self, count, subreddit_name):
+        """Generate fake Reddit data for testing"""
+        fake_posts = []
+        sample_texts = [
+            "This new Python library is amazing! Highly recommend it for data analysis.",
             "Having major issues with this framework. Documentation is terrible and confusing.",
             "Just launched my first data pipeline project! Feeling accomplished.",
             "Why is this technology so complicated? Really need help understanding it.",
@@ -101,27 +101,27 @@ def generate_fake_reddit_data(self, count, subreddit_name):
             "Can't figure this out. Spent hours debugging with no progress.",
             "Game changer for my workflow. Productivity increased significantly!",
             "Not impressed. Expected much better quality and performance."
-    ]  
-    
-    for i in range(count):
-        fake_posts.append({
-            'post_id': f'fake_{i}',
-            'title': f'Discussion about {subreddit_name} topic {i+1}',
-            'text': random.choice(sample_texts),
-            'author': f'user_{random.randint(1, 100)}',
-            'score': random.randint(10, 1000),
-            'upvate_ratio': random.uniform(0.7, 0.99),
-            'num_comments': random.randint(5, 50),
-            'created_utc': datetime.now() - timedelta(hours=random.randint(1, 168)),
-            'url': f'https://reddit.com/r/{subreddit_name}/fake_{i}',
-            'subreddit': subreddit_name,
-            'comments': []  
-        })
+        ]  
         
-    return fake_posts
+        for i in range(count):
+            fake_posts.append({
+                'post_id': f'fake_{i}',
+                'title': f'Discussion about {subreddit_name} topic {i+1}',
+                'text': random.choice(sample_texts),
+                'author': f'user_{random.randint(1, 100)}',
+                'score': random.randint(10, 1000),
+                'upvote_ratio': random.uniform(0.7, 0.99),
+                'num_comments': random.randint(5, 50),
+                'created_utc': datetime.now() - timedelta(hours=random.randint(1, 168)),
+                'url': f'https://reddit.com/r/{subreddit_name}/fake_{i}',
+                'subreddit': subreddit_name,
+                'comments': []  
+            })
+            
+        return fake_posts
 
 class SentimentAnalyzer:
-    def __inti__(self):
+    def __init__(self):
         self.vader = SentimentIntensityAnalyzer()
         
     def analyze_sentiment(self, text):
@@ -303,7 +303,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
     
-    st.title("🔴 Reddit Sentiment Analysis Dashboard")
+    st.title("Reddit Sentiment Analysis Dashboard")
     st.markdown("---")
     
     if 'reddit_client' not in st.session_state:

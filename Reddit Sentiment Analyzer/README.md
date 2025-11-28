@@ -1,4 +1,4 @@
-# 🔴 Reddit Sentiment Analysis Dashboard
+# Reddit Sentiment Analysis Dashboard
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red.svg)](https://streamlit.io)
