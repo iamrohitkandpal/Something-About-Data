@@ -4,8 +4,11 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-red.svg)](https://streamlit.io)
 [![NLP](https://img.shields.io/badge/NLP-Sentiment%20Analysis-green.svg)](https://en.wikipedia.org/wiki/Sentiment_analysis)
 [![Real-time](https://img.shields.io/badge/Real--time-Twitter%20API-blue.svg)](https://developer.twitter.com)
+[![Status](https://img.shields.io/badge/Status-Fully%20Functional-brightgreen.svg)](https://github.com)
 
 > 🎭 **Analyze the emotions of the internet in real-time!** Track Twitter sentiment, discover trending opinions, and understand public mood with AI-powered analysis.
+
+> ✅ **Project Status:** Fully functional with live Twitter API integration!
 
 ## 🌟 What This Project Does
 
@@ -61,7 +64,7 @@ sentiment_env\Scripts\activate  # Windows
 # source sentiment_env/bin/activate  # Mac/Linux
 ```
 
-### 2️⃣ **Twitter API Setup (Optional)**
+### 2️⃣ **Twitter API Setup**
 ```bash
 # Create a .env file with your Twitter API credentials
 TWITTER_BEARER_TOKEN="your_bearer_token_here"
@@ -71,7 +74,8 @@ TWITTER_ACCESS_TOKEN="your_access_token_here"
 TWITTER_ACCESS_TOKEN_SECRET="your_access_token_secret_here"
 ```
 
-> **📝 Note**: Don't have Twitter API? No problem! The app works with simulated data for demo purposes.
+> **✅ API Status**: Twitter API credentials are configured and working!  
+> **📝 Note**: Without API credentials, the app will use simulated data for demonstration purposes.
 
 ### 3️⃣ **Launch the Dashboard**
 ```bash
