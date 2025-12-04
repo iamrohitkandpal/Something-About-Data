@@ -120,6 +120,7 @@ def main() -> None:
                 query=filters['query'],
                 region=filters['region'],
                 sources=filters['sources'],
+                strict_match=filters['strict_match'],
                 from_date=filters['from_date'],
                 to_date=filters['to_date'],
             )
