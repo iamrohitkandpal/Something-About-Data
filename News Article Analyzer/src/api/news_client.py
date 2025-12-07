@@ -4,6 +4,7 @@
 """
 
 import os
+import re
 from newsapi import NewsApiClient
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Literal
@@ -119,17 +120,29 @@ class NewsClient():
         """
         stop_words = {'and', 'or', 'the', 'in', 'on', 'at', 'to', 'for', 'of', 'a', 'an'}
         
-        keywords = query.lower().split()
-        keywords = [k.strip() for k in keywords if k.strip() not in stop_words]
+        quoted_phrases = re.findall(r'"([^"]+)"', query)
+        remaining_query = re.sub(r'"([^"]+)"', '', query)
         
-        return keywords
+        words = remaining_query.lower().split()
+        words = [w.strip() for w in words if w.strip() and w.lower() not in stop_words]
+
+        keywords = quoted_phrases + words
+        
+        return keywords if keywords else [query.lower()]
         
     def _build_api_query(self, keywords: List[str]) -> str:
         """
         Build News API query with OR logic for broader results
         """
-        
-        return ' OR '.join(keywords)
+
+        if len(keywords) == 1:
+            return keywords[0]
+        elif len(keywords) == 2:
+            return f'({keywords[0]} AND {keywords[1]}) OR {keywords[0]} OR {keywords[1]}'
+        else:
+            main_phrase = ' '.join(keywords[:2])     
+            return f'"{main_phrase}" {keywords[2]} OR {keywords[0]} OR {keywords[1]} OR {keywords[2]}'
+
     
     def _article_contains_all_keywords(
         self, article: Dict, keywords: List[str]
@@ -140,17 +153,27 @@ class NewsClient():
         
         title = (article.get('title', '') or '').lower()
         description = (article.get('description', '') or '').lower()
+        # content = (article.get('content', '') or '').lower()
         
-        combined_text = f"{title} {description}"
+        # combined_text = f"{title} {description}"
+
+        if not keywords:
+            return True
         
         matched_count = 0
         for keyword in keywords:
-            if any(keyword in word for word in combined_text.split()):
+            keyword_lower = keyword.lower().strip()
+
+            if keyword_lower in title:
                 matched_count += 1
-                
-        required_matches = max(1, int(len(keywords) * 0.7))
+            elif keyword_lower in description:
+                matched_count += 1
         
-        return matched_count >= required_matches
+        if len(keywords) <= 2:
+            return matched_count == len(keywords)
+        else:
+            return matched_count >= 2
+        
         
     def search_articles(
         self,
@@ -158,7 +181,7 @@ class NewsClient():
         region: Literal['indian', 'international', 'both'] = 'both',
         sources: Optional[List[str]] = None, 
         from_date: Optional[datetime] = None, 
-        strict_match: bool = True,
+        strict_match: bool = False,
         to_date: Optional[datetime] = None,
         language: str = None,
         sort_by: str = 'publishedAt',
@@ -184,15 +207,19 @@ class NewsClient():
         keywords = self._parse_keywords(query)
         print(f"🔍 Search keywords: {keywords}")
         
+        if not keywords:
+            print("❌ No valid keywords found in query")
+            return result
+            
         api_query = self._build_api_query(keywords)
         print(f"📡 API query: {api_query}")
         
         language = language or self.default_language
         
-        if not from_date:
-            from_date = datetime.now() - timedelta(days=2)
         if not to_date:
             to_date = datetime.now() - timedelta(days=1)
+        if not from_date:
+            from_date = datetime.now() - timedelta(days=2)
             
         from_param = from_date.strftime('%Y-%m-%d')
         to_param = to_date.strftime('%Y-%m-%d')
