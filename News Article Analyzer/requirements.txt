@@ -1,5 +1,5 @@
 # For News API Integration
-newsapi-python>=0.2.7
+gnews>=0.3.6
 requests>=2.31.0
 
 # For Data Processing

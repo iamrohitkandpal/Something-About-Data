@@ -55,9 +55,13 @@ def main() -> None:
         st.error(f"❌ Failed to initialize: {e}")
         st.info("💡 Make sure your NEWS_API_KEY is set in .env file")
         st.stop()
+
+    @st.cache_data(ttl=3600)
+    def get_cached_sources():
+        return news_client.get_sources_by_region(region='both')
         
     # Getting the availables sources
-    sources_data = news_client.get_sources_by_region(region='both')
+    sources_data = get_cached_sources()
     all_sources = [s['id'] for s in sources_data.get('indian', [])] + \
                   [s['id'] for s in sources_data.get('international', [])]
                   
