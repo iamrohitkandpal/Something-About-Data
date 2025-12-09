@@ -577,7 +577,12 @@ class SentimentCharts:
 if __name__ == "__main__":
     import numpy as np
     
-    st.set_page_config(layout="wide")
+    st.set_page_config(
+        layout="wide",
+        page_title="Khavna",
+        page_icon=":bar_chart:",
+        initial_sidebar_state="expanded",
+    )
     st.title("📊 Test Charts")
     
     np.random.seed(42)

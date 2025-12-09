@@ -192,92 +192,89 @@ class UIComponents:
         with st.sidebar:
             st.header("🔍 Search Filters")
             
-            query = st.text_input(
-                "Search Keywords",
-                placeholder="e.g., artificial intelligence, climate change",
-                help="Enter keywords to search for articles"
-            )
-            
-            st.subheader("🌍 Region Selection")
-            region = st.radio(
-                "Choose news region:",
-                options=['both', 'indian', 'international'],
-                format_func=lambda x: {
-                    'both': '🌍 Both Indian & International',
-                    'indian': '🇮🇳 Indian News Only',
-                    'international': '🌍 International News Only',
-                }[x]
-            )
-            
-            strict_match = st.checkbox(
-                "🎯 Strict keyword matching",
-                value=True,
-                help="Require ALL keywords to be present in article"
-            )
-            
-            st.subheader("📰 News Sources")
-            
-            if region == 'indian':
-                st.caption(f"📊 {len([s for s in sources if 'india' in s.lower() or 'hindu' in s.lower() or 'times' in s.lower()])} Indian sources available")
-            elif region == 'international':
-                st.caption(f"📊 {len([s for s in sources if s not in ['the-times-of-india', 'the-hindu']])} International sources available")
-            else:
-                st.caption(f"📊 {len(sources)} total sources available")
-            
-            selected_sources = st.multiselect(
-                "Filter by sources (optional):",
-                options=sources,
-                help="Leave empty to search all sources"
-            )
-            
-            if selected_sources:
-                st.success(f"✅ {len(selected_sources)} sources selected")
-            else:
-                st.info("🌐 Searching all available sources")
-            
-            st.subheader("📅 Date Range")
-            col1, col2 = st.columns(2)
-            with col1:
-                from_date = st.date_input(
-                    "From",
-                    value=datetime.now() - timedelta(days=1),
-                    max_value=datetime.now()
+            with st.form(key='search_form'):
+                query = st.text_input(
+                    "Search Keywords",
+                    placeholder="e.g., artificial intelligence",
+                    help="Enter keywords to search for articles"
                 )
-            with col2:
-                to_date = st.date_input(
-                    "To",
-                    value=datetime.now(),
-                    max_value=datetime.now()
+            
+                st.subheader("🌍 Region Selection")
+                region = st.radio(
+                    "Choose news region:",
+                    options=['both', 'indian', 'international'],
+                    format_func=lambda x: {
+                        'both': '🌍 Both Indian & International',
+                        'indian': '🇮🇳 Indian News Only',
+                        'international': '🌍 International News Only',
+                    }[x]
                 )
-                
-            st.subheader("⚙️ Settings")
-            max_articles = st.slider(
-                "Maximum articles:",
-                min_value=10,
-                max_value=100,
-                value=50,
-                step=10
-            )
-            
-            search_clicked = st.button(
-                "🔍 Search Articles",
-                type="primary",
-                use_container_width=True
-            )
-            
-            st.markdown("---")
-            st.markdown("""
-            ### 📊 About
-            - **Sources**: 30+ verified publications
-            - **Sentiment**: TextBlob + VADER
-            - **Update**: 24-hour delay (Free Plan)
-            - **API Limit**: 100 requests/day
 
-            ### ⚠️ Free Plan Limits
-            - ⏰ 24-hour article delay
-            - 📅 Search last 30 days
-            - 🔢 100 requests/day
-            """)
+                strict_match = st.checkbox(
+                    "🎯 Strict keyword matching",
+                    value=True,
+                    help="Require ALL keywords to be present in article"
+                )
+
+                st.subheader("📰 News Sources")
+
+                if region == 'indian':
+                    st.caption(f"📊 {len([s for s in sources if 'india' in s.lower() or 'hindu' in s.lower() or 'times' in s.lower()])} Indian sources available")
+                elif region == 'international':
+                    st.caption(f"📊 {len([s for s in sources if s not in ['the-times-of-india', 'the-hindu']])} International sources available")
+                else:
+                    st.caption(f"📊 {len(sources)} total sources available")
+
+                selected_sources = st.multiselect(
+                    "Filter by sources (optional):",
+                    options=sources,
+                    help="Leave empty to search all sources"
+                )
+
+                if selected_sources:
+                    st.success(f"✅ {len(selected_sources)} sources selected")
+                else:
+                    st.info("🌐 Searching all available sources")
+
+                st.subheader("📅 Date Range")
+                col1, col2 = st.columns(2)
+                with col1:
+                    from_date = st.date_input(
+                        "From",
+                        value=datetime.now() - timedelta(days=1),
+                        max_value=datetime.now()
+                    )
+                with col2:
+                    to_date = st.date_input(
+                        "To",
+                        value=datetime.now(),
+                        max_value=datetime.now()
+                    )
+
+                st.subheader("⚙️ Settings")
+                max_articles = st.slider(
+                    "Maximum articles:",
+                    min_value=10,
+                    max_value=100,
+                    value=50,
+                    step=10
+                )
+
+                search_clicked = st.form_submit_button("🔍 Search Articles")
+
+                st.markdown("---")
+                st.markdown("""
+                ### 📊 About
+                - **Sources**: 30+ verified publications
+                - **Sentiment**: TextBlob + VADER
+                - **Update**: 24-hour delay (Free Plan)
+                - **API Limit**: 100 requests/day
+
+                ### ⚠️ Free Plan Limits
+                - ⏰ 24-hour article delay
+                - 📅 Search last 30 days
+                - 🔢 100 requests/day
+                """)
             
         return {
             'query': query,
@@ -436,7 +433,10 @@ class UIComponents:
             except:
                 timestamp = datetime.now()
                 
-        time_str = timestamp.strftime('%Y-%m-%d %H:%M') if isinstance(timestamp, datetime) else str(timestamp)
+        if pd.isna(timestamp):
+            time_str = "Unknown Date"
+        else:
+            time_str = timestamp.strftime('%Y-%m-%d %H:%M') if isinstance(timestamp, datetime) else str(timestamp)
         
         with st.container():
             st.markdown(f"### {title}")

@@ -3,16 +3,14 @@
 # Why dual sources? Compare regional bias & global perspectives
 """
 
-import os
-import re
-from newsapi import NewsApiClient
+import logging
+from gnews import GNews
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Literal
-from dotenv import load_dotenv
 import time
 
-# Load environment variables from .env files 
-load_dotenv()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class NewsClient():
     """
@@ -26,165 +24,27 @@ class NewsClient():
     
     def __init__(self):
         """
-        Initialize the News API Client
-        
-        Why load from .env?
-        - Security: API keys shouldn't bein code
-        - Flexibility: Easy to change without code changes
+        Initialize the GNews Client
         """
-        api_key = os.getenv('NEWS_API_KEY')
-        
-        if not api_key:
-            raise ValueError("❌ NEWS_API_KEY not found in .env file!")
-        
-        self.client = NewsApiClient(api_key=api_key)
-        self.default_language = os.getenv('DEFAULT_LANGUAGE', 'en')
-        self.default_page_size = int(os.getenv('DEFAULT_PAGE_SIZE', 100))
-        
+        self.default_language = 'en'
+        self.default_period = '30d'
+
         self.requests_today = 0
         self.last_request_time = None
-        
-    # ✅ VERIFIED INDIAN SOURCES (15+ channels)
-    INDIAN_SOURCES = [
-        # Native Indian Publishers
-        'the-times-of-india',
-        'the-hindu',
-        'google-news-in',
-        
-        # Sports (Cricket essential for India)
-        'espn-cric-info',
-        
-        # Business & Finance (High Indian readership)
-        'business-insider',
-        'reuters',
-        'bloomberg',
-        'fortune',
-        
-        # Technology
-        'techcrunch',
-        'the-verge',
-        'wired',
-        'hacker-news',
-        # Global with Indian coverage
-        'bbc-news',
-        'cnn',
-        'al-jazeera-english',
-        'time',
-        'national-geographic'
-    ]
     
-    # ✅ VERIFIED INTERNATIONAL SOURCES (15+ channels)
-    INTERNATIONAL_SOURCES = [
-        # US & Global Major News
-        'associated-press',
-        'abc-news',
-        'bbc-news',
-        'cnn',
-        'fox-news',
-        'nbc-news',
-        'usa-today',
-        'the-washington-post',
-        'the-wall-street-journal',
-        'politico',
-        
-        # Tech & Science
-        'engadget',
-        'new-scientist',
-        'next-big-future',
-        'recode',
-        'ars-technica',
-        
-        # Entertainment & Gaming
-        'entertainment-weekly',
-        'ign',
-        'polygon',
-        'mashable',
-        'vice-news'
-    ]
-    
-    def _check_rate_limit(self):
-        if self.requests_today >= 90:
-            print(f"⚠️ WARNING: {self.requests_today}/100 requests used today!")
-            
-        if self.requests_today >= 100:
-            raise Exception("❌ Daily rate limit (100 req) exceeded! Try again tomorrow")
-        
+
     def _log_request(self):
         self.requests_today += 1
-        self.last_request_time = datetime.now()
-        print(f"📊 API Requests: {self.requests_today}")
-        
-    def _parse_keywords(self, query: str) -> List[str]:
-        """
-        Parse user query into individual keywords
-        """
-        stop_words = {'and', 'or', 'the', 'in', 'on', 'at', 'to', 'for', 'of', 'a', 'an'}
-        
-        quoted_phrases = re.findall(r'"([^"]+)"', query)
-        remaining_query = re.sub(r'"([^"]+)"', '', query)
-        
-        words = remaining_query.lower().split()
-        words = [w.strip() for w in words if w.strip() and w.lower() not in stop_words]
+        print(f"📊 Google News Requests so far: {self.requests_today}")
 
-        keywords = quoted_phrases + words
-        
-        return keywords if keywords else [query.lower()]
-        
-    def _build_api_query(self, keywords: List[str]) -> str:
-        """
-        Build News API query with OR logic for broader results
-        """
-
-        if len(keywords) == 1:
-            return keywords[0]
-        elif len(keywords) == 2:
-            return f'({keywords[0]} AND {keywords[1]}) OR {keywords[0]} OR {keywords[1]}'
-        else:
-            main_phrase = ' '.join(keywords[:2])     
-            return f'"{main_phrase}" {keywords[2]} OR {keywords[0]} OR {keywords[1]} OR {keywords[2]}'
-
-    
-    def _article_contains_all_keywords(
-        self, article: Dict, keywords: List[str]
-    ) -> bool:
-        """
-        Check if article contains ALL keywords in title.description
-        """
-        
-        title = (article.get('title', '') or '').lower()
-        description = (article.get('description', '') or '').lower()
-        # content = (article.get('content', '') or '').lower()
-        
-        # combined_text = f"{title} {description}"
-
-        if not keywords:
-            return True
-        
-        matched_count = 0
-        for keyword in keywords:
-            keyword_lower = keyword.lower().strip()
-
-            if keyword_lower in title:
-                matched_count += 1
-            elif keyword_lower in description:
-                matched_count += 1
-        
-        if len(keywords) <= 2:
-            return matched_count == len(keywords)
-        else:
-            return matched_count >= 2
-        
-        
     def search_articles(
         self,
         query: str,
         region: Literal['indian', 'international', 'both'] = 'both',
         sources: Optional[List[str]] = None, 
         from_date: Optional[datetime] = None, 
-        strict_match: bool = False,
         to_date: Optional[datetime] = None,
-        language: str = None,
-        sort_by: str = 'publishedAt',
+        strict_match: bool = False,
     ) -> Dict[str, List[Dict]]:
         """
         Search for news articles by keyword and region
@@ -195,37 +55,14 @@ class NewsClient():
             sources: List of news source (e.g., ["bbc-news", "cnn"])
             from_date: Start date for artices
             to_date: End date for artices
-            languages: Article language (default: 'en')
-            sort_by: Sort order ('publishedAt', 'relevancy', 'popularity')
+            strict_match: Boolean to match all keywords
             
         Returns:
             List of article dictionaries with separate lists
         """
         
-        self._check_rate_limit()
-        
-        keywords = self._parse_keywords(query)
-        print(f"🔍 Search keywords: {keywords}")
-        
-        if not keywords:
-            print("❌ No valid keywords found in query")
-            return result
-            
-        api_query = self._build_api_query(keywords)
-        print(f"📡 API query: {api_query}")
-        
-        language = language or self.default_language
-        
-        if not to_date:
-            to_date = datetime.now() - timedelta(days=1)
-        if not from_date:
-            from_date = datetime.now() - timedelta(days=2)
-            
-        from_param = from_date.strftime('%Y-%m-%d')
-        to_param = to_date.strftime('%Y-%m-%d')
-        
-        print(f"📅 Searching from {from_param} to {to_param}")
-        print("⏰ Note: Articles have 24-hour delay on Free Plan")
+        self._log_request()
+        print("⏰ Smart Searching for: ")
         
         result = {
             'indian': [],
