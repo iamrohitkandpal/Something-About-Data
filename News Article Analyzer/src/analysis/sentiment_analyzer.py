@@ -2,19 +2,25 @@
 # The Heart of this Project: Analyzes sentiment of news articles 
 """
 
-from textblob import TextBlob
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import nltk
-from typing import Dict, List
 import numpy as np
 import pandas as pd
+import streamlit as st
 
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt')
-    nltk.download('stopwords')
-    
+from typing import Dict, List
+from textblob import TextBlob
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+@st.resources
+def _nltk_downloading():
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+        nltk.download('stopwords')
+
+_nltk_downloading()
+
 class SentimentAnalyzer:
     """
     Analyzes sentiment using TextBlob + VADER

@@ -7,7 +7,7 @@ import logging
 from gnews import GNews
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Literal
-import time
+from dateutil import parser
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,237 +62,126 @@ class NewsClient():
         """
         
         self._log_request()
-        print("⏰ Smart Searching for: ")
+        print(f"⏰ Smart Searching for: '{query}'")
         
-        result = {
+        results = {
             'indian': [],
             'international': [],
             'combined': [],
         }
         
         try:
-            
-            def fetch_batch(sources_list, region_type):
-                articles = []
-                batch_size = 20
-                
-                for i in range(0, len(sources_list), batch_size):
-                    batch = sources_list[i:i + batch_size]
-                    
-                    try:
-                        self._check_rate_limit()
-                        
-                        response = self.client.get_everything(
-                            q=api_query,
-                            sources=','.join(batch),  
-                            from_param=from_param,
-                            to=to_param,
-                            language=language,
-                            sort_by=sort_by,
-                            page_size=self.default_page_size
-                        )
-                        
-                        self._log_request()
-                        
-                        if response.get('status') == 'ok':
-                            batch_articles = response.get('articles', [])
-                            
-                            relevant_articles = []
-                            
-                            for article in batch_articles:
-                                
-                                if strict_match:
-                                    if self._article_contains_all_keywords  (article, keywords):
-                                        article['region'] = region_type
-                                        article['formatted'] = self.format_article(article)
-                                        relevant_articles.append(article)
-                                else:
-                                    article['region'] = region_type
-                                    article['formatted'] = self.format_article(article)
-                                    relevant_articles.append(article)
-                            
-                            articles.extend(relevant_articles)
-                            print(f" ✅ Batch {i//batch_size + 1}: {len(relevant_articles)}/{len(batch_articles)}  relevant articles")
-                            
-                        elif response.get('code') == 'rateLimited':
-                            print(f" ⚠️ Rate limit hit! Requests used: {self.requests_today}/100")
-                            break
-                        
-                        time.sleep(1)
-                    
-                    except Exception as e:
-                        print(f" ⚠️ Batch error: {e}")
-                        continue
-                
-                return articles
-            
             # Fetch Indian news articles
+            # Setting Up GNews for Indian News
             if region in ['indian', 'both']:
+                google_in = GNews(language='en', country='IN', period=self.default_period, max_results=20)
+                ind_news = google_in.get_news(query)
+
+                for article in ind_news:
+                    fmt = self.format_article(article, region='indian')
+                    results['indian'].append(fmt)
+                    results['combined'].append(fmt)
                 
-                if sources:
-                    indian_sources = [s for s in sources if s in self.INDIAN_SOURCES]
-                else:
-                    indian_sources = self.INDIAN_SOURCES
-                    
-                if indian_sources:
-                    result['indian'] = fetch_batch(indian_sources, 'indian')
-                    result['combined'].extend(result['indian'])
-                    print(f"🇮🇳 Total: {len(result['indian'])} Indian articles")
+                print(f"🇮🇳 Total: {len(results['indian'])} Indian articles")
                                             
-            # Fetch International news
+            # Fetching International news
             if region in ['international', 'both']:
+                countries = ['US', 'GB', 'CA', 'AU', 'NZ', 'SG', 'MY', 'PH', 'ID', 'TH', 'VN', 'IN']
                 
-                if sources:
-                    intl_sources = [s for s in sources if s in self.INTERNATIONAL_SOURCES]
-                else:
-                    intl_sources = self.INTERNATIONAL_SOURCES
-                    
-                if intl_sources:
-                    result['international'] = fetch_batch(intl_sources, 'international')
-                    result['combined'].extend(result['international'])
-                    print(f"🌍 Total: {len(result['international'])} International articles")                        
+                def fetch_country(country_code):
+                    try:
+                        g_intl = GNews(language='en', country=country_code, period=self.default_period, max_results=10)
+                        return g_intl.get_news(query)
+                    except Exception as e:
+                        print(f"⚠️ Failed to fetch for {country_code}: {e}")
+                        return []
+
+                import concurrent.futures
+                intl_articles = []
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                    future_to_country = {executor.submit(fetch_country, code): code for code in countries}
+
+                    for future in concurrent.futures.as_completed(future_to_country):
+                        intl_articles.extend(future.result())
+
+                    seen_urls = set()
+                    unique_intl = []
+
+                    for art in intl_articles:
+                        url = art.get('url')
+                        if url and url not in seen_urls:
+                            seen_urls.add(url)
+                            unique_intl.append(art)
+                            
+                    for article in unique_intl:
+                        fmt = self.format_article(article, region='international')
+                        results['international'].append(fmt)
+                        results['combined'].append(fmt)
                 
-            import random
-            random.shuffle(result['combined'])
-            
-            return result
-        
-        except Exception as e:
-            print(f"❌ Error fetching articles: {e}")
-            return result
-        
-    def get_top_headlines(
-        self,
-        category: Optional[str] = None,
-        country: str = 'us',
-        sources: Optional[List[str]] = None,
-    ) -> List[Dict]:
-        """
-        This gets current top headlines
-        
-        Why separate method?
-        - Top headlines use different API endpoint
-        - Different rate limits (faster updates)
-        - Useful for "trending news" feature
-        
-        Args:
-            categroy: News Category ('business', 'technology', etc.)
-            country: Country code (e.g., 'us', 'gb')
-            sources: Specific news sources
-        
-        Returns:
-            List of headline articles
-         """
-         
-        try:
-            response = self.client.get_top_headlines(
-                category=category,
-                country=country,
-                sources=','.join(sources) if sources else None,
-                page_size=self.default_page_size
-            )
-            
-            return response.get('articles', [])
-        
-        except Exception as e:
-            print(f"❌ Error fetching headlines: {e}")
-            return []
-         
-    def get_sources_by_region(
-        self,
-        region: Literal['indian', 'international', 'both'] = 'both'
-    ) -> Dict[str, List[Dict]]:
-        """
-        This gets available sources by region
-        """
-        
-        results = {
-            'indian': [],
-            'international': [],
-        }
-        
-        try:
-            self._check_rate_limit()
-            
-            all_sources_response = self.client.get_sources(language='en')
-            self._log_request()
-            
-            all_sources = all_sources_response.get('sources', [])
-            
-            for source in all_sources:
-                source_id = source.get('id', '')
+                print(f"� Fetched {len(results['international'])} International articles")                      
                 
-                if source_id in self.INDIAN_SOURCES:
-                    results['indian'].append(source)
-                elif source_id in self.INTERNATIONAL_SOURCES:
-                    results['international'].append(source)
-                    
+            print(f" ✅Fond {len(results['combined'])} articles via Google News")
+            
             return results
         
         except Exception as e:
-            print(f"❌ Error fetching sources: {e}")
+            print(f"❌ Error fetching from Google News: {e}")
             return results
-         
-    def get_sources(
-        self,
-        category: Optional[str] = None,
-        language: str = None,
-        country: str = None,
-    ) -> List[Dict]:
+        
+
+    def get_sources_by_region(self, region='both'):
         """
-        This helps in getting list of available news sources
-
-        Why needed?
-        - Populate sources selection dropdown in UI
-        - Filter by category/language/country 
-
-        Args:
-            category: Filter by category
-            language: Filter by language
-            country: Filter by country
-
-        Returns:
-            List of source dictionaries with id, name, description
+        Mock function to keep app.py happy.
+        Google News doesn't really work by 'source list' the same way.
         """
+        dummy_sources = [
+            {'id': 'google-news-in', 'name': 'Google News (India)'},
+            {'id': 'international-news', 'name': 'Global Source'}
+        ]
+        return {'indian': dummy_sources, 'international': dummy_sources}
 
-        try:
-            response = self.client.get_sources(
-                category=category,
-                language=language or self.client.default_language,
-                country=country
-            )
 
-            return response.get('sources', [])
-
-        except Exception as e:
-            print(f"❌ Error fetching sources: {e}")
-            return []
-
-    def format_article(self, article: Dict) -> Dict:
+    def format_article(self, article: Dict, region: str = 'unknown') -> Dict:
         """
         Makes the format of the article suitable for processing
 
         Why format?
-        - API return inconsistent data (some fieldsmay be None)
+        - GNews return inconsistent data (some fieldsmay be None)
         - Prepare for data_adapter conversion to suitable format
         - Clean up unnecessary fields
 
         Args:
-            article: Raw articale from API
+            article: Raw articale from GNews
+            region: Region of the article
 
         Returns:
             Cleaned article dictionary
         """
 
+        publisher = article.get('publisher', {})
+        source_name = publisher.get('title', 'Google News') if isinstance(publisher, dict) else 'Google News'
+
+        raw_date = article.get('published date', '')
+        try:
+            if raw_date:
+                dt = parser.parse(raw_date)
+                pub_date = dt.isoformat()
+            else:
+                pub_date = datetime.now().isoformat()
+        except:
+            pub_date = datetime.now().isoformat()
+                
+
         return {
             'title': article.get('title', 'No Title'),
-            'description': article.get('description', ''),
-            'content': article.get('content', ''),
+            'description': article.get('description', article.get('title', '')),
+            'content': article.get('description', ''),
             'url': article.get('url', ''),
-            'source': article.get('source', {}).get('name', 'Unknown'),
-            'author': article.get('author', 'Unknown'),
-            'published_at': article.get('publishedAt', ''),
-            'image_url': article.get('urlToImage', ''),
+            'source': source_name,
+            'author': source_name,
+            'published_at': pub_date,
+            'image_url': '',
+            'region': region
         }
 
 if __name__ == "__main__":
