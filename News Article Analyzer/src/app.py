@@ -4,18 +4,19 @@ Connects all components together
 """
 
 import sys
-from pathlib import Path
-from datetime import datetime
-
 import pandas as pd
 import streamlit as st
+import sqlite3
+import json
 
-from api.news_client import NewsClient
-from analysis.sentiment_analyzer import SentimentAnalyzer
-from analysis.preprocessor import TextPreprocessor
-from utils.data_adapter import DataAdapter
-from ui.components import UIComponents
+from pathlib import Path
+from datetime import datetime
 from ui.charts import SentimentCharts
+from api.news_client import NewsClient
+from ui.components import UIComponents
+from utils.data_adapter import DataAdapter
+from analysis.preprocessor import TextPreprocessor
+from analysis.sentiment_analyzer import SentimentAnalyzer
 
 sys.path.append(str(Path(__file__).parent))
 
@@ -53,8 +54,40 @@ def main() -> None:
                 st.warning(f"⚠️ API Usage: {news_client.requests_today}/100 requests used today")
     except Exception as e:
         st.error(f"❌ Failed to initialize: {e}")
-        st.info("💡 Make sure your NEWS_API_KEY is set in .env file")
         st.stop()
+
+    @st.cache_resource
+    def get_db_connection():
+        connection = sqlite3.connect('articles.db')
+        cursor = connection.cursor()
+
+        cursor.execute("PRAGMA foreign_keys = ON")
+        cursor.execute("PRAGMA journal_mode = WAL")
+        cursor.execute("PRAGMA cache_size = 10000")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS articles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT,
+                source TEXT,
+                author TEXT,
+                title TEXT,
+                description TEXT,
+                url TEXT,
+                published_at TEXT,
+                content TEXT,
+                sentiment_label TEXT,
+                sentiment_score REAL,
+                region TEXT,
+                cleaned_text TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        connection.commit()
+        return connection
+
 
     @st.cache_data(ttl=3600)
     def get_cached_sources():
@@ -80,76 +113,109 @@ def main() -> None:
     
     if not filters['query']:
         st.info("👈 Enter search keywords in the sidebar to get started")
-        
         st.markdown("---")
-        st.subheader("💡 Example Queries")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("""
-            **Technology**
-            - artificial intelligence            
-            - machine learning
-            - cryptocurrency
-            - tech startups
-            """)
-            
-        with col2:
-            st.markdown("""
-            **Politics**
-            - election results
-            - government policy
-            - international relations
-            - political debates
-            """)
-        
-        with col3:
-            st.markdown("""
-            **Business**
-            - stock market
-            - economic growth
-            - company earnings
-            - trade agreements
-            """)
-            
+        st.subheader("💡 Example Queries: Adani, Apple, Elections")
         st.stop()
-    
+
+    # Logic: Check DB -> Fetxh -> Analyze -> Save
     if filters['search_clicked']:
         st.session_state.analysis_complete = False
         
-        with st.spinner('🔍 Searching for articles...'):
-            # Fetching articles
-            articles = news_client.search_articles(
-                query=filters['query'],
-                region=filters['region'],
-                sources=filters['sources'],
-                strict_match=filters['strict_match'],
-                from_date=filters['from_date'],
-                to_date=filters['to_date'],
-            )
+        with st.spinner('🔍 Checking Local DataBase & Fetching articles...'):
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            cursor.execute("""
+                SELECT title, description, url, published_at, source, content, region, sentiment_label, sentiment_score, cleaned_text
+                FROM articles
+                WHERE query = ? AND created_at LIKE ?
+            """, (filters['query'], f"{today_str}%"))
+
+            db_results  = cursor.fetchall()
+            all_articles = []
+
+            if db_results and len(db_results) > 0:
+                st.info(f"⚡ Loaded {len(db_results)} articles from Database!")
+
+                for row in db_results:
+                    all_articles.append({
+                        'title': row[0],
+                        'description': row[1],
+                        'url': row[2],
+                        'published_at': row[3],
+                        'source': row[4],
+                        'content': row[5],
+                        'region': row[6],
+                        'sentiment': {
+                            'sentiment': row[7],
+                            'combined_score': row[8],
+                        },
+                        'processed_text': row[9]
+                    })
             
-            all_articles = articles['combined'][:filters['max_articles']]
+            else:
+                st.info("⚡ No articles found in Local Database")
+
+                # Fetching articles
+                raw_articles_dict = news_client.search_articles(
+                    query=filters['query'],
+                    region=filters['region'],
+                    sources=filters['sources'],
+                    strict_match=filters['strict_match'],
+                    from_date=filters['from_date'],
+                    to_date=filters['to_date'],
+                )
+
+                raw_articles = raw_articles_dict['combined'][:filters['max_articles']]
         
-            if not all_articles:
-                st.warning(f"⚠️ No articles found for '{filters['query']}'")
-                st.info("💡 Try different keywords or date range")
-                st.stop()
+                if not raw_articles:
+                    st.warning(f"⚠️ No articles found for '{filters['query']}'")
+                    st.stop()
 
-            st.success(f"✅ Found {len(all_articles)} articles")
+                st.write(f"🧹 Cleaning & Analyzing {len(raw_articles)} articles...")
+
+                preprocessed_articles = preprocessor.preprocess_batch(raw_articles)
+
+                all_articles = sentiment_analyzer.analyze_batch(preprocessed_articles)
+
+                if all_articles:
+                    params = []
+
+                    for article in all_articles:
+                        score = article.get('sentiment', {}).get('combined_score', 0.0)
+                        label = article.get('sentiment', {}).get('sentiment', 'neutral')
+
+                        params.append((
+                            filters['query'],
+                            article.get('source', 'Unknown'),
+                            article.get('author', ''),
+                            article.get('title', ''),
+                            article.get('description', ''),
+                            article.get('url', ''),
+                            article.get('published_at', ''),
+                            article.get('content', ''),
+                            label,
+                            score,
+                            article.get('region', 'unknown'),
+                            article.get('processed_text', '')
+                        ))
+
+                    cursor.executemany("""
+                        INSERT INTO articles (
+                            query, source, author, title, description, url, published_at, content, sentiment_label, sentiment_score, region, cleaned_text
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, params)
+
+                    conn.commit()
+                    st.toast(f"💾 Saved {len(all_articles)} analyzed results to DB!")
         
-        with st.spinner('🧹 Preprocessing articles...'):
-            processed_articles = preprocessor.preprocess_batch(all_articles)
-
-        with st.spinner('🧠 Analyzing sentiment...'):
-            analyzed_articles = sentiment_analyzer.analyze_batch(processed_articles)
-
-        with st.spinner('📊 Preparing visualizations...'):
+        with st.spinner('📊 Preparing Dashboard...'):
             # Conversion from list to DataFrame
-            df = DataAdapter.articles_to_dataframe(analyzed_articles)
+            df = DataAdapter.articles_to_dataframe(all_articles)
 
             # Coversion of the articles to statistics
-            summary = sentiment_analyzer.get_sentiment_summary(analyzed_articles)
+            summary = sentiment_analyzer.get_sentiment_summary(all_articles)
 
             # Converting the DataFrame to Regional Comparisons
             regional_stats = None
