@@ -8,7 +8,7 @@
 
 ## 🌟 What's Inside This Collection
 
-This repository contains **4 powerful data science projects** that demonstrate different aspects of modern data analytics and machine learning:
+This repository contains **5 powerful data science projects** that demonstrate different aspects of modern data analytics and machine learning:
 
 ### 🎬 **Movie Recommendation System**
 > AI-powered movie discovery with collaborative filtering
@@ -31,6 +31,13 @@ This repository contains **4 powerful data science projects** that demonstrate d
 - **🎨 Interactive Visualizations** - Word clouds & trend analysis
 - **🔍 Custom Text Analysis** - Analyze any text content
 
+### 📰 **News Article Sentiment Analyzer** ⭐ NEW
+> Compare Indian vs International media coverage with AI insights
+- **🧠 AI-Powered Summaries** - LLaMA 3.3 analyzes narrative differences
+- **🌍 Regional Comparison** - Indian (20+ sources) vs International (11 countries)
+- **💾 Smart Caching** - SQLite with WAL mode for instant reloads
+- **📊 Dual Sentiment** - TextBlob + VADER ensemble analysis
+
 ### 🏗️ **Data Modeling Trial**
 > Professional software architecture and clean code practices
 - **🎯 Clean Architecture** - Layered application design
@@ -45,6 +52,7 @@ This repository contains **4 powerful data science projects** that demonstrate d
 | 🎬 [Movie Recommend System](./Movie%20Recomend%20System/) | **ML/AI** | Python, Pandas, Scikit-learn, Jupyter | ⭐⭐⭐ | Entertainment, E-commerce |
 | 📈 [Data Forecasting for Retail](./Data%20Forecasting%20for%20Retail/) | **Time Series** | Prophet, Streamlit, Plotly | ⭐⭐⭐⭐ | Business Intelligence, Planning |
 | 🐦 [Tweets Sentiment Analysis](./Tweets%20Sentiment%20Analysis/) | **NLP/Real-time** | NLP, Twitter API, Streamlit | ⭐⭐⭐ | Social Media, Brand Monitoring |
+| 📰 [News Article Analyzer](./News%20Article%20Analyzer/) | **NLP/AI** | Groq AI, GNews, SQLite, Streamlit | ⭐⭐⭐⭐ | Media Bias, Political Analysis |
 | 🏗️ [Data Modeling Trial](./Data%20Modiling%20Trial/) | **Architecture** | OOP, Clean Code, Testing | ⭐⭐ | Software Development, Best Practices |
 
 ## 🚀 Quick Start Guide
@@ -71,11 +79,19 @@ pip install -r requirements.txt
 streamlit run dashboard.py
 ```
 
-#### 🐦 **For Sentiment Analysis:**
+#### 🐦 **For Twitter Sentiment:**
 ```bash
 cd "Tweets Sentiment Analysis"
 pip install -r requirements.txt
 streamlit run app.py
+```
+
+#### 📰 **For News Sentiment (NEW):**
+```bash
+cd "News Article Analyzer"
+pip install -r requirements.txt
+# Add GROQ_API_KEY to .env (free at console.groq.com)
+streamlit run src/app.py
 ```
 
 #### 🏗️ **For Clean Architecture:**
@@ -362,6 +378,7 @@ pip install prophet
 - 🎬 **Movie Lover?** → [Movie Recommendation System](./Movie%20Recomend%20System/)
 - 📈 **Business Analyst?** → [Data Forecasting for Retail](./Data%20Forecasting%20for%20Retail/)  
 - 🐦 **Social Media Enthusiast?** → [Twitter Sentiment Analysis](./Tweets%20Sentiment%20Analysis/)
+- 📰 **Media Analyst?** → [News Article Sentiment Analyzer](./News%20Article%20Analyzer/) ⭐ NEW
 - 🏗️ **Software Developer?** → [Data Modeling Trial](./Data%20Modiling%20Trial/)
 
 ### 🚀 **One-Command Quick Start:**
