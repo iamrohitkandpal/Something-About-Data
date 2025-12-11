@@ -11,7 +11,7 @@ from typing import Dict, List
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-@st.resources
+@st.cache_resource
 def _nltk_downloading():
     try:
         nltk.data.find('tokenizers/punkt')

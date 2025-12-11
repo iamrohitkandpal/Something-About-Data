@@ -26,3 +26,6 @@ python-dateutil>=2.8.2
 
 # For Type Hints
 typing-extensions>=4.8.0
+
+# For the AI Summarization
+groq>=0.4.2
