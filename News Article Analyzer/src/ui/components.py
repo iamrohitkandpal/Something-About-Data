@@ -152,6 +152,20 @@ class UIComponents:
             color: var(--text-dark) !important;
             font-weight: 500;
         }
+
+        /* AI Summary Spacing */
+        .ai_summary-box {
+            margin-top: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stMetric {
+            margin-bottom: 15px !important;
+        }
+
+        .streamlit-expanderContent {
+            padding-top: 15px;
+        }
         </style>
         """, unsafe_allow_html=True)
         
@@ -254,9 +268,9 @@ class UIComponents:
                 st.subheader("⚙️ Settings")
                 max_articles = st.slider(
                     "Maximum articles:",
-                    min_value=10,
-                    max_value=100,
-                    value=50,
+                    min_value=50,
+                    max_value=200,
+                    value=100,
                     step=10
                 )
 

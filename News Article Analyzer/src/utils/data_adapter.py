@@ -128,7 +128,7 @@ class DataAdapter:
                 vader = 0.0
             
             try:
-                published_at = article.get('publishedAt', '')
+                published_at = article.get('publishedAt', article.get('published_at', ''))
                 if published_at:
                     timestamp = pd.to_datetime(published_at)
                 else:
@@ -143,7 +143,7 @@ class DataAdapter:
                 'text': article.get('processed_text', article.get('title', '')),
                 'source': source_name,
                 'url': article.get('url', ''),
-                'published': article.get('publishedAt', ''),
+                'published': article.get('publishedAt', article.get('published_at', '')),
                 'timestamp': timestamp,
                 'region': article.get('region', 'international'),
                 
